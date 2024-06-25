@@ -28,6 +28,7 @@ app.post('/register', async (request, response) => {
     response.status(400)
     response.send('Password is too short')
   }
+  const hashedPassword = await bcrypt.hash(password, 10)
   const checkUser = `SELECT * FROM user WHERE username = ${username}`
   const sendQuery = db.get(checkUser)
   if (sendQuery === undefined) {
@@ -36,7 +37,7 @@ app.post('/register', async (request, response) => {
     VALUES(
       '${username}',
       '${name}',
-      '${password}',
+      '${hashedPassword}',
       '${gender}',
       '${location}
 
@@ -49,3 +50,46 @@ app.post('/register', async (request, response) => {
     response.send('User already exists')
   }
 })
+
+app.post('/login', async (request, response) => {
+  const {username, password} = request.body
+  const selectUserQuery = `SELECT * FROM user WHERE username = ${username}`
+  const dbUser = await db.get(selectUserQuery)
+  if (dbUser === undefined) {
+    response.status(400)
+    response.send('Invalid user')
+  } else {
+    const authorize = await bcrypt.compare(password, dbUser.password)
+    if (authorize) {
+      response.send('Login success!')
+    } else {
+      response.status(400)
+      response.send('Invalid Password')
+    }
+  }
+})
+
+app.put('/change-password', async (request, response) => {
+  const {username, oldPassword, newPassword} = request.body
+  const hashedPassword = await bcrypt.hash(newPassword, 10)
+  if (newPassword.length < 5) {
+    response.status(400)
+    response.send('Password is too short')
+  }
+  const selectUserQuery = `SELECT * FROM user WHERE username = ${username}`
+  const dbUser = db.get(selectUserQuery)
+  if (dbUser !== undefined) {
+    const authorize = await bcrypt.compare(oldPassword, dbUser.password)
+    if (authorize) {
+      const updatePassword = `
+      UPDATE user SET password = ${hashedPassword}
+      `
+      await db.run(updatePassword)
+      response.send('Password updated')
+    } else {
+      response.status(400)
+      response.send('Invalid current password')
+    }
+  }
+})
+module.exports = app
